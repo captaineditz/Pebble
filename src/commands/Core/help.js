@@ -181,7 +181,7 @@ export async function createInitialHelpMenu(client) {
     const buttonRow = new ActionRowBuilder().addComponents([
       supportButton,
       inviteButton,
-    ]);
+    );
 
     return {
         embeds: [embed],
