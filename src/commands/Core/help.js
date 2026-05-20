@@ -169,7 +169,7 @@ export async function createInitialHelpMenu(client) {
 
     const inviteButton = new ButtonBuilder()
         .setLabel("Invite Me")
-        .setURL(`https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&scope=bot&permissions=1099511627775`)
+        .setURL("https://discord.com/oauth2/authorize?client_id=1505174828905271436&permissions=8&integration_type=0&scope=bot")
         .setStyle(ButtonStyle.Link);
 
     const selectRow = createSelectMenu(
