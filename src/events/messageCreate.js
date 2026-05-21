@@ -9,8 +9,6 @@
  *   client.config.prefix (or hardcoded below) — your bot's normal prefix
  */
 
-import { hasNPAccess } from "../npSystem/npData.js";
-
 const PREFIX = "!"; // Change this to your bot's prefix
 const OWNER_ID = "1360488463371341834"; // Your Discord user ID
 
@@ -34,7 +32,7 @@ export default {
         }
 
         // ─── Path 2: No-prefix (NP) — owner always allowed ───────────
-        else if (message.author.id === OWNER_ID || await hasNPAccess(message.author.id)) {
+            else if (message.author.id === OWNER_ID) {
             const split = content.split(/\s+/);
             commandName = split[0].toLowerCase();
             args = split.slice(1);
