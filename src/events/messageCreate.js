@@ -8,6 +8,7 @@
  *   client.commands  — a Collection of prefix commands
  *   client.config.prefix (or hardcoded below) — your bot's normal prefix
  */
+import { hasNPAccess } from "../npSystem/npData.js"; 
 
 const PREFIX = "!"; // Change this to your bot's prefix
 const OWNER_ID = "1360488463371341834"; // Your Discord user ID
