@@ -1,4 +1,4 @@
-﻿import {
+import {
     SlashCommandBuilder,
     ActionRowBuilder,
     ButtonBuilder,
@@ -40,10 +40,6 @@ const CATEGORY_ICONS = {
     Config: "⚙️",
 };
 
-
-
-
-
 export async function createInitialHelpMenu(client) {
     const commandsPath = path.join(__dirname, "../../commands");
     const categoryDirs = (
@@ -73,7 +69,7 @@ export async function createInitialHelpMenu(client) {
     ];
 
     const botName = client?.user?.username || "Bot";
-    const embed = createEmbed({ 
+    const embed = createEmbed({
         title: `🤖 ${botName} Help Center`,
         description: "Your all-in-one Discord companion for moderation, economy, fun, and server management.",
         color: 'primary'
@@ -157,8 +153,8 @@ export async function createInitialHelpMenu(client) {
         }
     );
 
-    embed.setFooter({ 
-        text: "Made with ❤️" 
+    embed.setFooter({
+        text: "The Best bot"
     });
     embed.setTimestamp();
 
@@ -179,9 +175,9 @@ export async function createInitialHelpMenu(client) {
     );
 
     const buttonRow = new ActionRowBuilder().addComponents([
-      supportButton,
-      inviteButton,
-    );
+        supportButton,
+        inviteButton,
+    ]);
 
     return {
         embeds: [embed],
@@ -195,10 +191,9 @@ export default {
         .setDescription("Displays the help menu with all available commands"),
 
     async execute(interaction, guildConfig, client) {
-        
         const { MessageFlags } = await import('discord.js');
         await InteractionHelper.safeDefer(interaction);
-        
+
         const { embeds, components } = await createInitialHelpMenu(client);
 
         await InteractionHelper.safeEditReply(interaction, {
@@ -219,10 +214,8 @@ export default {
                     components: [],
                 });
             } catch (error) {
-                
+                // silently ignore
             }
         }, HELP_MENU_TIMEOUT_MS);
     },
 };
-
-
