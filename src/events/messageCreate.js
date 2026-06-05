@@ -1,6 +1,6 @@
 /**
  * messageCreate.js
- * Handles both prefix (!) and no-prefix (NP) commands.
+ * Handles both prefix (p!) and no-prefix (NP) commands.
  * Wraps message into a fake interaction so all slash commands work as-is.
  */
 import { hasNPAccess } from "../npSystem/npData.js";
@@ -9,10 +9,19 @@ const PREFIX = "!";
 const OWNER_ID = "1360488463371341834";
 
 /**
- * Creates a fake interaction object from a Discord message.
- * This tricks slash commands into working with prefix/NP messages.
+ * Extract options from command definition
  */
-function createFakeInteraction(message, client, args) {
+function getCommandOptions(command) {
+    if (!command.data || !command.data.options) return [];
+    return command.data.options;
+}
+
+/**
+ * Creates a fake interaction object from a Discord message.
+ * Maps prefix arguments to slash command options by position.
+ */
+function createFakeInteraction(message, client, args, command) {
+    const commandOptions = getCommandOptions(command);
     const replied = { value: false };
 
     const buildResponse = (data) => {
@@ -20,16 +29,11 @@ function createFakeInteraction(message, client, args) {
         return data;
     };
 
-    // Parse arguments into an options-like object
-    const parseArgs = () => {
-        const parsed = {};
-        for (let i = 0; i < args.length; i++) {
-            parsed[i] = args[i];
-        }
-        return parsed;
-    };
-
-    const parsedArgs = parseArgs();
+    // Map args to options by position
+    const optionsMap = {};
+    commandOptions.forEach((option, index) => {
+        optionsMap[option.name] = args[index] || null;
+    });
 
     return {
         // ── Identity ──────────────────────────────────────────────
@@ -53,41 +57,41 @@ function createFakeInteraction(message, client, args) {
         createdAt: message.createdAt,
         createdTimestamp: message.createdTimestamp,
 
-        // ── Options (parse prefix args) ────────────────────────────
+        // ── Options (smart parsing) ────────────────────────────────
         options: {
-            getString: (name) => parsedArgs[0] || null,
+            getString: (name) => optionsMap[name] || null,
             getInteger: (name) => {
-                const val = parsedArgs[0];
+                const val = optionsMap[name];
                 return val ? parseInt(val, 10) : null;
             },
             getNumber: (name) => {
-                const val = parsedArgs[0];
+                const val = optionsMap[name];
                 return val ? parseFloat(val) : null;
             },
             getBoolean: (name) => {
-                const val = parsedArgs[0];
-                return val === "true" || val === "1" ? true : null;
+                const val = optionsMap[name];
+                return val === "true" || val === "1" || val === "yes" ? true : null;
             },
             getUser: (name) => {
-                const mention = parsedArgs[0];
+                const mention = optionsMap[name];
                 if (!mention) return null;
                 const userId = mention.replace(/[<@!>]/g, "");
                 return client.users.cache.get(userId) || null;
             },
             getMember: (name) => {
-                const mention = parsedArgs[0];
+                const mention = optionsMap[name];
                 if (!mention || !message.guild) return null;
                 const userId = mention.replace(/[<@!>]/g, "");
                 return message.guild.members.cache.get(userId) || null;
             },
             getChannel: (name) => {
-                const mention = parsedArgs[0];
+                const mention = optionsMap[name];
                 if (!mention || !message.guild) return null;
                 const channelId = mention.replace(/[<#>]/g, "");
                 return message.guild.channels.cache.get(channelId) || null;
             },
             getRole: (name) => {
-                const mention = parsedArgs[0];
+                const mention = optionsMap[name];
                 if (!mention || !message.guild) return null;
                 const roleId = mention.replace(/[<@&>]/g, "");
                 return message.guild.roles.cache.get(roleId) || null;
@@ -172,7 +176,7 @@ export default {
             );
         }
 
-        const fakeInteraction = createFakeInteraction(message, client, args);
+        const fakeInteraction = createFakeInteraction(message, client, args, command);
 
         try {
             await command.execute(fakeInteraction, null, client);
