@@ -12,14 +12,24 @@ const OWNER_ID = "1360488463371341834";
  * Creates a fake interaction object from a Discord message.
  * This tricks slash commands into working with prefix/NP messages.
  */
-function createFakeInteraction(message, client) {
+function createFakeInteraction(message, client, args) {
     const replied = { value: false };
 
     const buildResponse = (data) => {
-        // Handle string shorthand
         if (typeof data === "string") data = { content: data };
         return data;
     };
+
+    // Parse arguments into an options-like object
+    const parseArgs = () => {
+        const parsed = {};
+        for (let i = 0; i < args.length; i++) {
+            parsed[i] = args[i];
+        }
+        return parsed;
+    };
+
+    const parsedArgs = parseArgs();
 
     return {
         // ── Identity ──────────────────────────────────────────────
@@ -43,17 +53,48 @@ function createFakeInteraction(message, client) {
         createdAt: message.createdAt,
         createdTimestamp: message.createdTimestamp,
 
-        // ── Options (slash command args — return null for prefix) ─
+        // ── Options (parse prefix args) ────────────────────────────
         options: {
-            getString: () => null,
-            getInteger: () => null,
-            getNumber: () => null,
-            getBoolean: () => null,
-            getUser: () => null,
-            getMember: () => null,
-            getChannel: () => null,
-            getRole: () => null,
-            getMentionable: () => null,
+            getString: (name) => parsedArgs[0] || null,
+            getInteger: (name) => {
+                const val = parsedArgs[0];
+                return val ? parseInt(val, 10) : null;
+            },
+            getNumber: (name) => {
+                const val = parsedArgs[0];
+                return val ? parseFloat(val) : null;
+            },
+            getBoolean: (name) => {
+                const val = parsedArgs[0];
+                return val === "true" || val === "1" ? true : null;
+            },
+            getUser: (name) => {
+                const mention = parsedArgs[0];
+                if (!mention) return null;
+                const userId = mention.replace(/[<@!>]/g, "");
+                return client.users.cache.get(userId) || null;
+            },
+            getMember: (name) => {
+                const mention = parsedArgs[0];
+                if (!mention || !message.guild) return null;
+                const userId = mention.replace(/[<@!>]/g, "");
+                return message.guild.members.cache.get(userId) || null;
+            },
+            getChannel: (name) => {
+                const mention = parsedArgs[0];
+                if (!mention || !message.guild) return null;
+                const channelId = mention.replace(/[<#>]/g, "");
+                return message.guild.channels.cache.get(channelId) || null;
+            },
+            getRole: (name) => {
+                const mention = parsedArgs[0];
+                if (!mention || !message.guild) return null;
+                const roleId = mention.replace(/[<@&>]/g, "");
+                return message.guild.roles.cache.get(roleId) || null;
+            },
+            getMentionable: (name) => {
+                return this.options.getUser(name) || this.options.getRole(name);
+            },
             getSubcommand: () => null,
             getSubcommandGroup: () => null,
             get: () => null,
@@ -72,7 +113,6 @@ function createFakeInteraction(message, client) {
             return message.reply(buildResponse(data));
         },
         deferReply: async () => {
-            // No-op for prefix commands (no "thinking..." state needed)
             replied.value = true;
             return Promise.resolve();
         },
@@ -83,11 +123,11 @@ function createFakeInteraction(message, client) {
         deferred: false,
         replied: false,
 
-        // ── Locale (some commands use this) ───────────────────────
+        // ── Locale ────────────────────────────────────────────────
         locale: "en-US",
         guildLocale: "en-US",
 
-        // ── Raw message reference (in case commands need it) ──────
+        // ── Raw message reference ─────────────────────────────────
         _originalMessage: message,
     };
 }
@@ -96,7 +136,6 @@ export default {
     name: "messageCreate",
 
     async execute(message, client) {
-        // Ignore bots and DMs
         if (message.author.bot) return;
         if (!message.guild) return;
 
@@ -124,19 +163,16 @@ export default {
             return;
         }
 
-        // Find the command
         const command = client.commands?.get(commandName);
         if (!command) return;
 
-        // Log NP usage
         if (usedNP) {
             console.log(
                 `[NP] ${message.author.tag} (${message.author.id}) used "${commandName}" without prefix in #${message.channel.name}`
             );
         }
 
-        // Build fake interaction and execute
-        const fakeInteraction = createFakeInteraction(message, client);
+        const fakeInteraction = createFakeInteraction(message, client, args);
 
         try {
             await command.execute(fakeInteraction, null, client);
