@@ -1,7 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataPath = path.join(__dirname, '../../data/prefixes.json');
 
 function loadPrefixes() {
@@ -13,7 +15,7 @@ function savePrefixes(data) {
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 }
 
-module.exports = {
+export default {
   data: new SlashCommandBuilder()
     .setName('addprefix')
     .setDescription('Add an additional prefix (max 3 total)')
