@@ -1,15 +1,15 @@
 /**
  * messageCreate.js
- * Handles both prefix (p!) and no-prefix (NP) commands.
- * Wraps message into a fake interaction so all slash commands work as-is.
+ * Handles both prefix (!) and no-prefix (NP) commands.
+ * Properly supports subcommands and subcommand groups.
  */
 import { hasNPAccess } from "../npSystem/npData.js";
 
-const PREFIX = "!";
+const PREFIX = "p!";
 const OWNER_ID = "1360488463371341834";
 
 /**
- * Extract options from command definition
+ * Get command's option structure
  */
 function getCommandOptions(command) {
     if (!command.data || !command.data.options) return [];
@@ -17,8 +17,20 @@ function getCommandOptions(command) {
 }
 
 /**
+ * Extract subcommand and its options from command definition
+ */
+function getSubcommandInfo(command, subcommandName) {
+    const options = getCommandOptions(command);
+    for (const option of options) {
+        if (option.type === 1 && option.name === subcommandName) {
+            return option.options || [];
+        }
+    }
+    return [];
+}
+
+/**
  * Creates a fake interaction object from a Discord message.
- * Maps prefix arguments to slash command options by position.
  */
 function createFakeInteraction(message, client, args, command) {
     const commandOptions = getCommandOptions(command);
@@ -29,10 +41,25 @@ function createFakeInteraction(message, client, args, command) {
         return data;
     };
 
+    // Determine if this is a subcommand
+    let subcommandName = null;
+    let subcommandOptions = [];
+    let argsForOptions = args;
+
+    if (commandOptions.length > 0 && commandOptions[0].type === 1) {
+        // This command has subcommands
+        subcommandName = args[0]?.toLowerCase() || null;
+        argsForOptions = args.slice(1); // Skip subcommand name
+        
+        if (subcommandName) {
+            subcommandOptions = getSubcommandInfo(command, subcommandName);
+        }
+    }
+
     // Map args to options by position
     const optionsMap = {};
-    commandOptions.forEach((option, index) => {
-        optionsMap[option.name] = args[index] || null;
+    subcommandOptions.forEach((option, index) => {
+        optionsMap[option.name] = argsForOptions[index] || null;
     });
 
     return {
@@ -57,7 +84,7 @@ function createFakeInteraction(message, client, args, command) {
         createdAt: message.createdAt,
         createdTimestamp: message.createdTimestamp,
 
-        // ── Options (smart parsing) ────────────────────────────────
+        // ── Options (smart parsing for subcommands) ────────────────
         options: {
             getString: (name) => optionsMap[name] || null,
             getInteger: (name) => {
@@ -70,7 +97,8 @@ function createFakeInteraction(message, client, args, command) {
             },
             getBoolean: (name) => {
                 const val = optionsMap[name];
-                return val === "true" || val === "1" || val === "yes" ? true : null;
+                if (val === null) return null;
+                return val === "true" || val === "1" || val === "yes" || val === "enable" || val === "on";
             },
             getUser: (name) => {
                 const mention = optionsMap[name];
@@ -99,7 +127,7 @@ function createFakeInteraction(message, client, args, command) {
             getMentionable: (name) => {
                 return this.options.getUser(name) || this.options.getRole(name);
             },
-            getSubcommand: () => null,
+            getSubcommand: () => subcommandName,
             getSubcommandGroup: () => null,
             get: () => null,
             data: [],
