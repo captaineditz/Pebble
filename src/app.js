@@ -299,9 +299,10 @@ class TitanBot extends Client {
     }
   }
 
-  async registerCommands() {
+ async registerCommands() {
     try {
-      await registerSlashCommands(this, this.config.bot.guildId);
+      // null = register globally for all servers
+      await registerSlashCommands(this, null);
     } catch (error) {
       logger.error('Error registering commands:', error);
     }
