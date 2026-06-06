@@ -1,30 +1,18 @@
 /**
  * messageCreate.js
  * Handles both prefix (!) and no-prefix (NP) commands.
- * Properly supports subcommands and subcommand groups.
+ * Wraps message into a fake interaction so all slash commands work as-is.
  */
 import { hasNPAccess } from "../npSystem/npData.js";
 
 const PREFIX = "!";
 const OWNER_ID = "1360488463371341834";
 
-function getCommandOptions(command) {
-    if (!command.data || !command.data.options) return [];
-    return command.data.options;
-}
-
-function getSubcommandInfo(command, subcommandName) {
-    const options = getCommandOptions(command);
-    for (const option of options) {
-        if (option.type === 1 && option.name === subcommandName) {
-            return option.options || [];
-        }
-    }
-    return [];
-}
-
-function createFakeInteraction(message, client, args, command) {
-    const commandOptions = getCommandOptions(command);
+/**
+ * Creates a fake interaction object from a Discord message.
+ * This tricks slash commands into working with prefix/NP messages.
+ */
+function createFakeInteraction(message, client, args) {
     const replied = { value: false };
 
     const buildResponse = (data) => {
@@ -32,25 +20,19 @@ function createFakeInteraction(message, client, args, command) {
         return data;
     };
 
-    let subcommandName = null;
-    let subcommandOptions = [];
-    let argsForOptions = args;
-
-    if (commandOptions.length > 0 && commandOptions[0].type === 1) {
-        subcommandName = args[0]?.toLowerCase() || null;
-        argsForOptions = args.slice(1);
-        
-        if (subcommandName) {
-            subcommandOptions = getSubcommandInfo(command, subcommandName);
+    // Parse arguments into an options-like object
+    const parseArgs = () => {
+        const parsed = {};
+        for (let i = 0; i < args.length; i++) {
+            parsed[i] = args[i];
         }
-    }
+        return parsed;
+    };
 
-    const optionsMap = {};
-    subcommandOptions.forEach((option, index) => {
-        optionsMap[option.name] = argsForOptions[index] || null;
-    });
+    const parsedArgs = parseArgs();
 
     return {
+        // ── Identity ──────────────────────────────────────────────
         id: message.id,
         token: null,
         type: 2,
@@ -60,6 +42,7 @@ function createFakeInteraction(message, client, args, command) {
         isModalSubmit: () => false,
         isAutocomplete: () => false,
 
+        // ── Context ───────────────────────────────────────────────
         user: message.author,
         member: message.member,
         guild: message.guild,
@@ -70,42 +53,41 @@ function createFakeInteraction(message, client, args, command) {
         createdAt: message.createdAt,
         createdTimestamp: message.createdTimestamp,
 
+        // ── Options (parse prefix args) ────────────────────────────
         options: {
-            getString: (name) => optionsMap[name] || null,
+            getString: (name) => parsedArgs[0] || null,
             getInteger: (name) => {
-                const val = optionsMap[name];
-                return val !== null && val !== undefined ? parseInt(val, 10) : null;
+                const val = parsedArgs[0];
+                return val ? parseInt(val, 10) : null;
             },
             getNumber: (name) => {
-                const val = optionsMap[name];
-                return val !== null && val !== undefined ? parseFloat(val) : null;
+                const val = parsedArgs[0];
+                return val ? parseFloat(val) : null;
             },
             getBoolean: (name) => {
-                const val = optionsMap[name];
-                if (val === null || val === undefined) return null;
-                const lowerVal = String(val).toLowerCase().trim();
-                return lowerVal === "true" || lowerVal === "1" || lowerVal === "yes" || lowerVal === "enable" || lowerVal === "on";
+                const val = parsedArgs[0];
+                return val === "true" || val === "1" ? true : null;
             },
             getUser: (name) => {
-                const mention = optionsMap[name];
+                const mention = parsedArgs[0];
                 if (!mention) return null;
                 const userId = mention.replace(/[<@!>]/g, "");
                 return client.users.cache.get(userId) || null;
             },
             getMember: (name) => {
-                const mention = optionsMap[name];
+                const mention = parsedArgs[0];
                 if (!mention || !message.guild) return null;
                 const userId = mention.replace(/[<@!>]/g, "");
                 return message.guild.members.cache.get(userId) || null;
             },
             getChannel: (name) => {
-                const mention = optionsMap[name];
+                const mention = parsedArgs[0];
                 if (!mention || !message.guild) return null;
                 const channelId = mention.replace(/[<#>]/g, "");
                 return message.guild.channels.cache.get(channelId) || null;
             },
             getRole: (name) => {
-                const mention = optionsMap[name];
+                const mention = parsedArgs[0];
                 if (!mention || !message.guild) return null;
                 const roleId = mention.replace(/[<@&>]/g, "");
                 return message.guild.roles.cache.get(roleId) || null;
@@ -113,12 +95,13 @@ function createFakeInteraction(message, client, args, command) {
             getMentionable: (name) => {
                 return this.options.getUser(name) || this.options.getRole(name);
             },
-            getSubcommand: () => subcommandName,
+            getSubcommand: () => null,
             getSubcommandGroup: () => null,
             get: () => null,
             data: [],
         },
 
+        // ── Reply methods ─────────────────────────────────────────
         reply: async (data) => {
             replied.value = true;
             return message.reply(buildResponse(data));
@@ -136,12 +119,15 @@ function createFakeInteraction(message, client, args, command) {
         deleteReply: async () => Promise.resolve(),
         fetchReply: async () => Promise.resolve(message),
 
+        // ── State ─────────────────────────────────────────────────
         deferred: false,
         replied: false,
 
+        // ── Locale ────────────────────────────────────────────────
         locale: "en-US",
         guildLocale: "en-US",
 
+        // ── Raw message reference ─────────────────────────────────
         _originalMessage: message,
     };
 }
@@ -156,6 +142,7 @@ export default {
         const content = message.content.trim();
         let commandName, args, usedNP = false;
 
+        // ─── Path 1: Normal prefix command ───────────────────────────
         if (content.startsWith(PREFIX)) {
             const withoutPrefix = content.slice(PREFIX.length).trim();
             const split = withoutPrefix.split(/\s+/);
@@ -163,6 +150,7 @@ export default {
             args = split.slice(1);
         }
 
+        // ─── Path 2: No-prefix (NP) — owner + NP users ───────────────
         else if (message.author.id === OWNER_ID || await hasNPAccess(message.author.id)) {
             const split = content.split(/\s+/);
             commandName = split[0].toLowerCase();
@@ -170,6 +158,7 @@ export default {
             usedNP = true;
         }
 
+        // ─── No match — normal message, ignore ───────────────────────
         else {
             return;
         }
@@ -183,7 +172,7 @@ export default {
             );
         }
 
-        const fakeInteraction = createFakeInteraction(message, client, args, command);
+        const fakeInteraction = createFakeInteraction(message, client, args);
 
         try {
             await command.execute(fakeInteraction, null, client);
