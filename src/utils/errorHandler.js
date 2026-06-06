@@ -1,38 +1,11 @@
 /**
  * Centralized Error Handling System
- * 
- * This module provides structured error handling for the TitanBot application.
- * 
- * PHILOSOPHY:
- * - All errors are categorized by type for consistent handling
- * - User-facing errors display friendly messages
- * - System errors are logged with full context
- * - Errors contain context information for debugging
- * 
- * USAGE:
- * - Throw TitanBotError for application-specific errors
- * - Use handleInteractionError for interaction errors
- * - Errors are automatically formatted and sent to user
- * 
- * ERROR TYPES:
- * - VALIDATION: Invalid user input
- * - PERMISSION: Missing access permissions
- * - CONFIGURATION: Missing/invalid configuration
- * - DATABASE: Database operation failure
- * - NETWORK: Network/external service failure
- * - DISCORD_API: Discord API error
- * - USER_INPUT: User input processing error
- * - RATE_LIMIT: Rate limit exceeded
- * - UNKNOWN: Unclassified error
  */
 
 import { logger } from './logger.js';
 import { createEmbed } from './embeds.js';
 import { MessageFlags } from 'discord.js';
 import { getErrorMetadata, getDefaultErrorCodeByType, resolveErrorCode, ErrorCodes } from './errorRegistry.js';
-
-
-
 
 export const ErrorTypes = {
     VALIDATION: 'validation',
@@ -46,9 +19,6 @@ export const ErrorTypes = {
     UNKNOWN: 'unknown'
 };
 
-
-
-
 export class TitanBotError extends Error {
     constructor(message, type = ErrorTypes.UNKNOWN, userMessage = null, context = {}) {
         super(message);
@@ -60,9 +30,6 @@ export class TitanBotError extends Error {
         this.timestamp = new Date().toISOString();
     }
 }
-
-
-
 
 export function categorizeError(error) {
     if (error instanceof TitanBotError) {
@@ -102,9 +69,6 @@ export function categorizeError(error) {
 
     return ErrorTypes.UNKNOWN;
 }
-
-
-
 
 const UserMessages = {
     [ErrorTypes.VALIDATION]: {
@@ -153,9 +117,6 @@ const UserMessages = {
     }
 };
 
-
-
-
 export function getUserMessage(error, context = {}) {
     const type = categorizeError(error);
     const messages = UserMessages[type] || UserMessages[ErrorTypes.UNKNOWN];
@@ -171,27 +132,34 @@ export function getUserMessage(error, context = {}) {
     return messages.default;
 }
 
+// FIXED: Arguments in correct order (interaction first, then error)
+export async function handleInteractionError(error, interaction, context = {}) {
+    // Handle both argument orders for backwards compatibility
+    if (error && typeof error === 'object' && (error.isChatInputCommand || error.isButton || error.isModalSubmit)) {
+        // Arguments were swapped, fix them
+        [error, interaction] = [interaction, error];
+    }
 
+    if (!interaction) {
+        logger.error('handleInteractionError called without interaction:', { error: error?.message });
+        return;
+    }
 
-
-export async function handleInteractionError(interaction, error, context = {}) {
     const errorType = categorizeError(error);
     const userMessage = getUserMessage(error, context);
     const resolvedErrorCode = resolveErrorCode({ error, errorType, context });
     const errorMetadata = getErrorMetadata(resolvedErrorCode);
-    const traceId = context.traceId || interaction?.traceContext?.traceId || interaction?.traceId || error?.context?.traceId;
-    
-    
-    
-    
+    const traceId = context.traceId || interaction?.traceId || error?.context?.traceId;
+
     const isUserError = [
         ErrorTypes.VALIDATION,
         ErrorTypes.RATE_LIMIT,
         ErrorTypes.USER_INPUT,
         ErrorTypes.PERMISSION
     ].includes(errorType);
-    const isExpectedError = Boolean(error?.context?.expected === true || error?.context?.suppressErrorLog === true);
     
+    const isExpectedError = Boolean(error?.context?.expected === true || error?.context?.suppressErrorLog === true);
+
     const logData = {
         event: 'interaction.error',
         errorCode: resolvedErrorCode,
@@ -214,13 +182,12 @@ export async function handleInteractionError(interaction, error, context = {}) {
         },
         context
     };
-    
+
     if (isUserError || isExpectedError) {
         if (errorType !== ErrorTypes.RATE_LIMIT) {
             logger.debug(`User Error [${errorType.toUpperCase()}]: ${error.message}`, logData);
         }
     } else {
-        // System errors (database, network, etc.) - unexpected failures
         logger.error(`System Error [${errorType.toUpperCase()}]`, {
             ...logData,
             stack: error.stack
@@ -252,23 +219,17 @@ export async function handleInteractionError(interaction, error, context = {}) {
     }
 
     try {
-        
         if (!interaction || !interaction.id) {
             logger.warn('Interaction was null or invalid when handling error', {
                 event: 'interaction.error.invalid_interaction',
-                errorCode: ErrorCodes.INTERACTION_INVALID,
-                remediationHint: getErrorMetadata(ErrorCodes.INTERACTION_INVALID).remediation,
                 traceId
             });
             return;
         }
 
-        
         if (interaction.createdTimestamp && (Date.now() - interaction.createdTimestamp) > 14 * 60 * 1000) {
             logger.warn('Interaction expired before error handler could send response', {
                 event: 'interaction.error.expired',
-                errorCode: ErrorCodes.INTERACTION_EXPIRED,
-                remediationHint: getErrorMetadata(ErrorCodes.INTERACTION_EXPIRED).remediation,
                 traceId,
                 guildId: interaction.guildId,
                 userId: interaction.user.id,
@@ -291,34 +252,21 @@ export async function handleInteractionError(interaction, error, context = {}) {
             await interaction.reply(errorMessage);
         }
     } catch (replyError) {
-        
         if (replyError.code === 40060 || replyError.code === 10062) {
-            logger.warn('Interaction already acknowledged or expired, cannot send error response:', {
+            logger.warn('Interaction already acknowledged or expired, cannot send error response', {
                 event: 'interaction.error.response_unavailable',
-                errorCode: String(replyError.code),
-                traceId,
-                guildId: interaction.guildId,
-                userId: interaction.user.id,
-                command: interaction.commandName || context.command,
-                code: replyError.code
+                code: replyError.code,
+                traceId
             });
             return;
         }
         logger.error('Failed to send error response:', {
             event: 'interaction.error.response_failed',
-            errorCode: String(replyError.code || ErrorCodes.INTERACTION_RESPONSE_FAILED),
-            remediationHint: getErrorMetadata(ErrorCodes.INTERACTION_RESPONSE_FAILED).remediation,
-            traceId,
-            guildId: interaction.guildId,
-            userId: interaction.user.id,
-            command: interaction.commandName || context.command,
-            error: replyError
+            error: replyError.message,
+            traceId
         });
     }
 }
-
-
-
 
 function getErrorTitle(errorType) {
     const titles = {
@@ -336,9 +284,6 @@ function getErrorTitle(errorType) {
     return titles[errorType] || titles[ErrorTypes.UNKNOWN];
 }
 
-
-
-
 export function withErrorHandling(fn, context = {}) {
     return async (...args) => {
         try {
@@ -346,11 +291,11 @@ export function withErrorHandling(fn, context = {}) {
         } catch (error) {
             const interaction = args.find(arg => 
                 arg && typeof arg === 'object' && 
-                (arg.isCommand || arg.isButton || arg.isModalSubmit || arg.isStringSelectMenu || arg.isChatInputCommand)
+                (arg.isChatInputCommand || arg.isButton || arg.isModalSubmit || arg.isStringSelectMenu)
             );
             
             if (interaction) {
-                await handleInteractionError(interaction, error, context);
+                await handleInteractionError(error, interaction, context);
             } else {
                 logger.error('Error in non-interaction context:', error);
             }
@@ -359,9 +304,6 @@ export function withErrorHandling(fn, context = {}) {
         }
     };
 }
-
-
-
 
 export function createError(message, type = ErrorTypes.UNKNOWN, userMessage = null, context = {}) {
     const normalizedContext = {
@@ -381,7 +323,3 @@ export default {
     withErrorHandling,
     createError
 };
-
-
-
-
