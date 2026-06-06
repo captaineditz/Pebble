@@ -9,35 +9,55 @@ const __dirname = dirname(__filename);
 
 export default async function loadEvents(client) {
     const eventsPath = join(__dirname, '../events');
-    const eventFiles = await readdir(eventsPath).then(files => files.filter(file => file.endsWith('.js')));
-
-    for (const file of eventFiles) {
-        const filePath = join(eventsPath, file);
-        try {
-            const { default: event } = await import(`file://${filePath}`);
-
-            if (!event?.name || typeof event.execute !== 'function') {
-                logger.warn(`Event ${file} is missing required "name" or "execute" properties.`);
-                continue;
-            }
-
-            const safeExecute = async (...args) => {
-                try {
-                    await event.execute(...args, client);
-                } catch (error) {
-                    logger.error(`Error executing event ${event.name}:`, error);
-                }
-            };
+    
+    try {
+        const eventFiles = await readdir(eventsPath);
+        const jsFiles = eventFiles.filter(file => file.endsWith('.js'));
+        
+        logger.info(`Found ${jsFiles.length} event files to load`);
+        
+        for (const file of jsFiles) {
+            const filePath = join(eventsPath, file);
             
-            if (event.once) {
-                client.once(event.name, safeExecute);
-            } else {
-                client.on(event.name, safeExecute);
+            try {
+                const { default: event } = await import(`file://${filePath}`);
+                
+                // Validate event structure
+                if (!event?.name) {
+                    logger.warn(`Event ${file} missing "name" property`);
+                    continue;
+                }
+                
+                if (typeof event.execute !== 'function') {
+                    logger.warn(`Event ${file} missing "execute" function`);
+                    continue;
+                }
+                
+                // Wrap execute with error handling
+                const safeExecute = async (...args) => {
+                    try {
+                        await event.execute(...args, client);
+                    } catch (error) {
+                        logger.error(`Error in event ${event.name}:`, error);
+                    }
+                };
+                
+                // Register event
+                if (event.once) {
+                    client.once(event.name, safeExecute);
+                    logger.debug(`Loaded one-time event: ${event.name}`);
+                } else {
+                    client.on(event.name, safeExecute);
+                    logger.debug(`Loaded event: ${event.name}`);
+                }
+            } catch (error) {
+                logger.error(`Failed to load event ${file}:`, error.message);
             }
-        } catch (error) {
-            logger.error(`Error loading event ${file}:`, error);
         }
+        
+        logger.info(`✅ Event handler loaded successfully`);
+    } catch (error) {
+        logger.error('Fatal error loading events:', error);
+        throw error;
     }
 }
-
-
