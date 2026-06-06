@@ -17,15 +17,19 @@ class TitanBot extends Client {
   constructor() {
     super({
       intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildBans,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.PresenceIntent
+        
+        GatewayIntentBits.Guilds,                        
+        GatewayIntentBits.GuildMembers,                 
+        
+        
+        GatewayIntentBits.GuildMessages,                
+        GatewayIntentBits.GuildMessageReactions,        
+        GatewayIntentBits.MessageContent,               
+        
+        GatewayIntentBits.GuildVoiceStates,             
+        
+        
+        GatewayIntentBits.GuildBans,                    
       ],
     });
 
@@ -49,6 +53,7 @@ class TitanBot extends Client {
       const dbInstance = await initializeDatabase();
       this.db = dbInstance.db;
       
+      // Check database status and report
       const dbStatus = this.db.getStatus();
       if (dbStatus.isDegraded) {
         logger.warn('');
@@ -79,7 +84,7 @@ class TitanBot extends Client {
       await this.login(this.config.bot.token);
       startupLog('Discord login successful');
       
-      startupLog('Registering slash commands (globally)...');
+      startupLog('Registering slash commands...');
       await this.registerCommands();
       startupLog('Slash commands registration complete');
       
@@ -223,11 +228,9 @@ class TitanBot extends Client {
   }
 
   setupCronJobs() {
-    logger.info('Setting up cron jobs...');
     cron.schedule('0 6 * * *', () => checkBirthdays(this));
     cron.schedule('* * * * *', () => checkGiveaways(this));
     cron.schedule('*/15 * * * *', () => this.updateAllCounters());
-    logger.info('✅ Cron jobs scheduled');
   }
 
   async updateAllCounters() {
@@ -255,6 +258,7 @@ class TitanBot extends Client {
           }
         }
         
+        // Save cleaned counters if any were orphaned
         if (orphanedCounters.length > 0) {
           await saveServerCounters(this, guildId, validCounters);
           logger.info(`Cleaned up ${orphanedCounters.length} orphaned counter(s) from guild ${guildId} during scheduled update`);
@@ -295,14 +299,12 @@ class TitanBot extends Client {
     }
   }
 
-  async registerCommands() {
+ async registerCommands() {
     try {
-      logger.info('Registering commands globally for all servers...');
+      // null = register globally for all servers
       await registerSlashCommands(this, null);
-      logger.info('✅ Global command registration successful');
     } catch (error) {
-      logger.error('❌ Error registering commands:', error.message);
-      // Don't exit - bot can still function with cached commands
+      logger.error('Error registering commands:', error);
     }
   }
 
@@ -313,10 +315,12 @@ class TitanBot extends Client {
     logger.info(`${'='.repeat(60)}`);
 
     try {
+      
       logger.info('Stopping cron jobs...');
       cron.getTasks().forEach(task => task.stop());
       logger.info('✅ Cron jobs stopped');
 
+      // Close database connection
       if (this.db && this.db.db) {
         logger.info('Closing database connection...');
         try {
@@ -329,18 +333,21 @@ class TitanBot extends Client {
         }
       }
 
+      
       logger.info('Destroying Discord client...');
       if (this.isReady()) {
         try {
           this.destroy();
           logger.info('✅ Discord client destroyed');
         } catch (error) {
+          
+          
           logger.warn('Discord client destroy warning (non-critical):', error.message);
         }
       }
 
       logger.info('✅ Graceful shutdown complete');
-      shutdownLog('Bot stopped successfully.');
+  shutdownLog('Bot stopped successfully.');
       process.exit(0);
     } catch (error) {
       logger.error('Error during graceful shutdown:', error);
@@ -375,3 +382,5 @@ try {
 }
 
 export default TitanBot;
+
+
