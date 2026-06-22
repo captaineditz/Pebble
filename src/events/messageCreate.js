@@ -216,7 +216,9 @@ export default {
         if (message.author.bot) return;
         if (!message.guild) return;
 
-        await handleAfkChecks(message, client);
+        try {
+            await handleAfkChecks(message, client);
+        } catch (_) {}
 
         const content = message.content.trim();
         let commandName, args, usedNP = false;
