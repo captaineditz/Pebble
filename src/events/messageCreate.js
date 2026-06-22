@@ -5,7 +5,22 @@
  */
 import { hasNPAccess } from "../npSystem/npData.js";
 import { AfkService } from "../services/afkService.js";
-import { getGuildConfig } from "../services/guildConfig.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PREFIXES_PATH = path.join(__dirname, "../data/prefixes.json");
+
+function getGuildPrefixes(guildId) {
+    try {
+        if (!fs.existsSync(PREFIXES_PATH)) return [];
+        const data = JSON.parse(fs.readFileSync(PREFIXES_PATH, "utf8"));
+        return data[guildId] || [];
+    } catch (_) {
+        return [];
+    }
+}
 
 const DEFAULT_PREFIX = "!";
 const OWNER_ID = "1360488463371341834";
@@ -225,18 +240,8 @@ export default {
         let commandName, args, usedNP = false;
 
         // Build list of active prefixes for this guild
-        let prefixes = [DEFAULT_PREFIX];
-        try {
-            const guildConfig = await getGuildConfig(client, message.guild.id);
-            if (guildConfig?.prefix && !prefixes.includes(guildConfig.prefix)) {
-                prefixes.push(guildConfig.prefix);
-            }
-            if (Array.isArray(guildConfig?.prefixes)) {
-                for (const p of guildConfig.prefixes) {
-                    if (p && !prefixes.includes(p)) prefixes.push(p);
-                }
-            }
-        } catch (_) {}
+        const customPrefixes = getGuildPrefixes(message.guild.id);
+        const prefixes = [DEFAULT_PREFIX, ...customPrefixes.filter(p => p !== DEFAULT_PREFIX)];
 
         // ─── Path 1: Normal prefix command ───────────────────────────
         const usedPrefix = prefixes.find(p => content.startsWith(p));
