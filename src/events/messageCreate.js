@@ -152,9 +152,13 @@ async function handleAfkChecks(message, client) {
         const pings = afkData.pings || [];
         let pingText = '';
         if (pings.length > 0) {
-            const lines = pings.slice(0, 10).map(p =>
-                `• **${p.username}** in <#${p.channelId}> — <t:${Math.floor(p.timestamp / 1000)}:R>`
-            );
+            const lines = pings.slice(0, 10).map(p => {
+                const jumpLink = p.messageId
+                    ? `https://discord.com/channels/${p.guildId}/${p.channelId}/${p.messageId}`
+                    : null;
+                const jump = jumpLink ? ` — [Jump](${jumpLink})` : '';
+                return `• **${p.username}** in <#${p.channelId}> <t:${Math.floor(p.timestamp / 1000)}:R>${jump}`;
+            });
             pingText = `\n\n**Pings while you were away (${pings.length}):**\n${lines.join('\n')}`;
             if (pings.length > 10) pingText += `\n…and ${pings.length - 10} more.`;
         }
@@ -198,6 +202,8 @@ async function handleAfkChecks(message, client) {
             userId: message.author.id,
             username: message.author.username,
             channelId: message.channel.id,
+            messageId: message.id,
+            guildId,
             timestamp: Date.now()
         });
     }
