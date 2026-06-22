@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Remove-Item \"D:\\\\Pebble\\\\src\\\\commands\\\\Moderation\\\\autorole.js\")",
+      "PowerShell(Remove-Item \"D:\\\\Pebble\\\\src\\\\commands\\\\Moderation\\\\autorole.js\" -Confirm:$false)"
+    ]
+  }
+}

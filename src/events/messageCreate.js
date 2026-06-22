@@ -4,6 +4,7 @@
  * Wraps message into a fake interaction so all slash commands work as-is.
  */
 import { hasNPAccess } from "../npSystem/npData.js";
+import { AfkService } from "../services/afkService.js";
 
 const PREFIX = "!";
 const OWNER_ID = "1360488463371341834";
@@ -132,12 +133,84 @@ function createFakeInteraction(message, client, args) {
     };
 }
 
+async function handleAfkChecks(message, client) {
+    const guildId = message.guild.id;
+    const userId = message.author.id;
+
+    // --- Return from AFK ---
+    const afkData = await AfkService.getAfkStatus(client, guildId, userId);
+    if (afkData) {
+        await AfkService.clearAfk(client, guildId, userId);
+
+        const elapsed = Date.now() - afkData.timestamp;
+        const minutes = Math.floor(elapsed / 60000);
+        const hours = Math.floor(minutes / 60);
+        const durationText = hours > 0
+            ? `${hours}h ${minutes % 60}m`
+            : `${minutes}m`;
+
+        const pings = afkData.pings || [];
+        let pingText = '';
+        if (pings.length > 0) {
+            const lines = pings.slice(0, 10).map(p =>
+                `• **${p.username}** in <#${p.channelId}> — <t:${Math.floor(p.timestamp / 1000)}:R>`
+            );
+            pingText = `\n\n**Pings while you were away (${pings.length}):**\n${lines.join('\n')}`;
+            if (pings.length > 10) pingText += `\n…and ${pings.length - 10} more.`;
+        }
+
+        try {
+            await message.reply({
+                embeds: [{
+                    title: '👋 Welcome back!',
+                    description: `You were AFK for **${durationText}**.${pingText}`,
+                    color: 0x57f287,
+                    timestamp: new Date().toISOString()
+                }]
+            });
+        } catch (_) {}
+    }
+
+    // --- Mention AFK users ---
+    if (message.mentions.users.size === 0) return;
+
+    for (const [mentionedId, mentionedUser] of message.mentions.users) {
+        if (mentionedId === userId) continue;
+        const status = await AfkService.getAfkStatus(client, guildId, mentionedId);
+        if (!status) continue;
+
+        const elapsed = Date.now() - status.timestamp;
+        const minutes = Math.floor(elapsed / 60000);
+        const hours = Math.floor(minutes / 60);
+        const durationText = hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+
+        try {
+            await message.reply({
+                embeds: [{
+                    description: `**${mentionedUser.username}** is currently AFK: **${status.reason}** (${durationText} ago)`,
+                    color: 0xfee75c,
+                    timestamp: new Date().toISOString()
+                }]
+            });
+        } catch (_) {}
+
+        await AfkService.addPing(client, guildId, mentionedId, {
+            userId: message.author.id,
+            username: message.author.username,
+            channelId: message.channel.id,
+            timestamp: Date.now()
+        });
+    }
+}
+
 export default {
     name: "messageCreate",
 
     async execute(message, client) {
         if (message.author.bot) return;
         if (!message.guild) return;
+
+        await handleAfkChecks(message, client);
 
         const content = message.content.trim();
         let commandName, args, usedNP = false;
