@@ -16,19 +16,11 @@ export default {
       startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
       startupLog(`Loaded ${client.commands.size} commands`);
 
-      const BETA_GUILD_ID = '1505180294993674300';
-
       for (const guild of client.guilds.cache.values()) {
         try {
-          if (guild.id === BETA_GUILD_ID) {
-            await registerCommands(client, guild.id);
-            logger.info(`Commands registered for beta guild: ${guild.name}`);
-          } else {
-            await guild.commands.set([]);
-            logger.info(`Commands cleared from guild: ${guild.name} (${guild.id})`);
-          }
+          await registerCommands(client, guild.id);
         } catch (err) {
-          logger.error(`Failed to update commands for guild ${guild.id} (${guild.name}):`, err);
+          logger.error(`Failed to register commands for guild ${guild.id} (${guild.name}):`, err);
         }
       }
 
