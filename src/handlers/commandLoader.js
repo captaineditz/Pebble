@@ -145,12 +145,19 @@ export async function registerCommands(client, guildId) {
         let totalSubcommands = 0;
 const registeredNames = new Set();
         
+        const EXCLUDED_CATEGORIES = new Set(['Fun', 'Economy']);
+
         for (const command of client.commands.values()) {
             if (command.data && typeof command.data.toJSON === 'function') {
                 const commandName = command.data.name;
-                
+
+                if (EXCLUDED_CATEGORIES.has(command.category)) {
+                    logger.debug(`Skipping registration of ${commandName} (category: ${command.category})`);
+                    continue;
+                }
+
                 logger.debug(`Processing command for registration: ${commandName}`);
-                
+
                 if (!registeredNames.has(commandName)) {
                     registeredNames.add(commandName);
                     const commandJson = command.data.toJSON();
