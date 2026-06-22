@@ -16,6 +16,7 @@ export default {
       startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
       startupLog(`Loaded ${client.commands.size} commands`);
 
+
       for (const guild of client.guilds.cache.values()) {
         try {
           await registerCommands(client, guild.id);

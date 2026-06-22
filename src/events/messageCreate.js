@@ -5,8 +5,9 @@
  */
 import { hasNPAccess } from "../npSystem/npData.js";
 import { AfkService } from "../services/afkService.js";
+import { getGuildConfig } from "../services/guildConfig.js";
 
-const PREFIX = "!";
+const DEFAULT_PREFIX = "!";
 const OWNER_ID = "1360488463371341834";
 
 /**
@@ -223,9 +224,24 @@ export default {
         const content = message.content.trim();
         let commandName, args, usedNP = false;
 
+        // Build list of active prefixes for this guild
+        let prefixes = [DEFAULT_PREFIX];
+        try {
+            const guildConfig = await getGuildConfig(client, message.guild.id);
+            if (guildConfig?.prefix && !prefixes.includes(guildConfig.prefix)) {
+                prefixes.push(guildConfig.prefix);
+            }
+            if (Array.isArray(guildConfig?.prefixes)) {
+                for (const p of guildConfig.prefixes) {
+                    if (p && !prefixes.includes(p)) prefixes.push(p);
+                }
+            }
+        } catch (_) {}
+
         // ─── Path 1: Normal prefix command ───────────────────────────
-        if (content.startsWith(PREFIX)) {
-            const withoutPrefix = content.slice(PREFIX.length).trim();
+        const usedPrefix = prefixes.find(p => content.startsWith(p));
+        if (usedPrefix) {
+            const withoutPrefix = content.slice(usedPrefix.length).trim();
             const split = withoutPrefix.split(/\s+/);
             commandName = split[0].toLowerCase();
             args = split.slice(1);
