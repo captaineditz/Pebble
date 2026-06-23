@@ -151,25 +151,27 @@ class TitanBot extends Client {
     });
 
     app.get('/health', (req, res) => {
-      const dbStatus = this.db?.getStatus?.() || { isDegraded: 'unknown' };
+      const dbStatus = this.db?.getStatus?.() || { isDegraded: true, connectionType: 'none', initialized: false };
       const status = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         database: {
-          connected: dbStatus.connectionType !== 'none',
-          degraded: dbStatus.isDegraded,
-          type: dbStatus.connectionType
+          connected: Boolean(dbStatus.connectionType && dbStatus.connectionType !== 'none'),
+          degraded: Boolean(dbStatus.isDegraded),
+          type: dbStatus.connectionType || 'none',
+          initialized: Boolean(dbStatus.initialized)
         }
       };
       res.status(200).json(status);
     });
 
     app.get('/ready', (req, res) => {
-      const dbStatus = this.db?.getStatus?.() || { isDegraded: true };
-      const isReady = this.isReady() && !dbStatus.isDegraded;
+      const dbStatus = this.db?.getStatus?.() || { isDegraded: true, initialized: false };
+      const isReady = this.isReady && typeof this.isReady === 'function' ? this.isReady() : false;
+      const dbOk = Boolean(dbStatus.initialized && !dbStatus.isDegraded && dbStatus.connectionType !== 'none');
 
-      if (isReady) {
+      if (isReady && dbOk) {
         return res.status(200).json({
           ready: true,
           message: 'Bot is ready'
@@ -178,7 +180,7 @@ class TitanBot extends Client {
 
       res.status(503).json({
         ready: false,
-        reason: !this.isReady() ? 'Bot not Ready' : 'Database degraded'
+        reason: !isReady ? 'Bot not Ready' : (!dbStatus.initialized ? 'Database not initialized' : 'Database degraded')
       });
     });
 
@@ -317,8 +319,31 @@ class TitanBot extends Client {
     try {
       
       logger.info('Stopping cron jobs...');
-      cron.getTasks().forEach(task => task.stop());
-      logger.info('✅ Cron jobs stopped');
+      try {
+        if (typeof cron.getTasks === 'function') {
+          const tasks = cron.getTasks();
+          if (tasks && typeof tasks.forEach === 'function') {
+            tasks.forEach(task => {
+              try {
+                task.stop?.();
+              } catch (e) {
+                logger.warn('Error stopping a cron task:', e?.message ?? e);
+              }
+            });
+          }
+        } else if (Array.isArray(cron.tasks)) {
+          cron.tasks.forEach(task => {
+            try {
+              task.stop?.();
+            } catch (e) {
+              logger.warn('Error stopping a cron task:', e?.message ?? e);
+            }
+          });
+        }
+        logger.info('✅ Cron jobs stopped');
+      } catch (e) {
+        logger.warn('Cron shutdown encountered an error (non-fatal):', e?.message ?? e);
+      }
 
       // Close database connection
       if (this.db && this.db.db) {
@@ -347,7 +372,7 @@ class TitanBot extends Client {
       }
 
       logger.info('✅ Graceful shutdown complete');
-  shutdownLog('Bot stopped successfully.');
+ shutdownLog('Bot stopped successfully.');
       process.exit(0);
     } catch (error) {
       logger.error('Error during graceful shutdown:', error);
@@ -382,5 +407,3 @@ try {
 }
 
 export default TitanBot;
-
-
