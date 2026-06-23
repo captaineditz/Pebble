@@ -128,6 +128,32 @@ export default {
                             { name: '1 Day', value: '1d' }
                         )
                 )
+        )
+        .addSubcommandGroup(group =>
+            group
+                .setName('whitelist')
+                .setDescription('Manage users, roles, and channels exempt from automod')
+                .addSubcommand(sub =>
+                    sub
+                        .setName('add')
+                        .setDescription('Add a user, role, or channel to the whitelist')
+                        .addUserOption(o => o.setName('user').setDescription('User to whitelist'))
+                        .addRoleOption(o => o.setName('role').setDescription('Role to whitelist'))
+                        .addChannelOption(o => o.setName('channel').setDescription('Channel to whitelist'))
+                )
+                .addSubcommand(sub =>
+                    sub
+                        .setName('remove')
+                        .setDescription('Remove a user, role, or channel from the whitelist')
+                        .addUserOption(o => o.setName('user').setDescription('User to remove'))
+                        .addRoleOption(o => o.setName('role').setDescription('Role to remove'))
+                        .addChannelOption(o => o.setName('channel').setDescription('Channel to remove'))
+                )
+                .addSubcommand(sub =>
+                    sub
+                        .setName('list')
+                        .setDescription('View the current automod whitelist')
+                )
         ),
 
     category: 'Moderation',
@@ -137,8 +163,13 @@ export default {
             const deferred = await InteractionHelper.safeDefer(interaction);
             if (!deferred) return;
 
+            const subcommandGroup = interaction.options.getSubcommandGroup(false);
             const subcommand = interaction.options.getSubcommand();
             const guildId = interaction.guildId;
+
+            if (subcommandGroup === 'whitelist') {
+                return await handleWhitelist(interaction, client, guildId, subcommand);
+            }
 
             switch (subcommand) {
                 case 'toggle':
@@ -424,6 +455,68 @@ async function handleSettings(interaction, client, guildId) {
         });
     } catch (error) {
         throw error;
+    }
+}
+
+async function handleWhitelist(interaction, client, guildId, subcommand) {
+    const currentConfig = await getGuildConfig(client, guildId);
+    const automodConfig = currentConfig.automod || { enabled: false, defaultAction: 'warn', rules: {} };
+    const whitelist = automodConfig.whitelist || { users: [], roles: [], channels: [] };
+
+    if (subcommand === 'add' || subcommand === 'remove') {
+        const user    = interaction.options.getUser('user');
+        const role    = interaction.options.getRole('role');
+        const channel = interaction.options.getChannel('channel');
+
+        if (!user && !role && !channel) {
+            throw new TitanBotError('No target', ErrorTypes.VALIDATION, 'Provide at least one user, role, or channel.');
+        }
+
+        const added = [], removed = [], alreadyIn = [], notIn = [];
+
+        const toggle = (list, id, label) => {
+            if (subcommand === 'add') {
+                if (list.includes(id)) { alreadyIn.push(label); }
+                else { list.push(id); added.push(label); }
+            } else {
+                const idx = list.indexOf(id);
+                if (idx === -1) { notIn.push(label); }
+                else { list.splice(idx, 1); removed.push(label); }
+            }
+        };
+
+        if (user)    toggle(whitelist.users,    user.id,    `<@${user.id}>`);
+        if (role)    toggle(whitelist.roles,    role.id,    `<@&${role.id}>`);
+        if (channel) toggle(whitelist.channels, channel.id, `<#${channel.id}>`);
+
+        automodConfig.whitelist = whitelist;
+        await updateGuildConfig(client, guildId, { automod: automodConfig });
+
+        const lines = [];
+        if (added.length)    lines.push(`✅ Added: ${added.join(', ')}`);
+        if (removed.length)  lines.push(`🗑️ Removed: ${removed.join(', ')}`);
+        if (alreadyIn.length) lines.push(`ℹ️ Already whitelisted: ${alreadyIn.join(', ')}`);
+        if (notIn.length)    lines.push(`ℹ️ Not in whitelist: ${notIn.join(', ')}`);
+
+        const embed = successEmbed()
+            .setTitle('Automod Whitelist Updated')
+            .setDescription(lines.join('\n'));
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (subcommand === 'list') {
+        const users    = (whitelist.users    || []).map(id => `<@${id}>`);
+        const roles    = (whitelist.roles    || []).map(id => `<@&${id}>`);
+        const channels = (whitelist.channels || []).map(id => `<#${id}>`);
+
+        const embed = infoEmbed()
+            .setTitle('Automod Whitelist')
+            .addFields(
+                { name: '👤 Users',    value: users.length    ? users.join(', ')    : 'None', inline: false },
+                { name: '🏷️ Roles',    value: roles.length    ? roles.join(', ')    : 'None', inline: false },
+                { name: '📢 Channels', value: channels.length ? channels.join(', ') : 'None', inline: false }
+            );
+        return interaction.editReply({ embeds: [embed] });
     }
 }
 
