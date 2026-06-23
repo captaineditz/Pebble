@@ -47,12 +47,17 @@ const GUILD_CONFIG_DEFAULTS = {
         }
     },
     
-    // AutoMod Settings
-    automod: {
-        enabled: false,
-        defaultAction: 'warn',
-        rules: {}
-    },
+  // AutoMod Settings
+automod: {
+    enabled: false,
+    defaultAction: 'warn',
+    rules: {},
+    whitelist: {
+        users: [],
+        roles: [],
+        channels: []
+    }
+},
     
     // Prefix Settings
     prefixes: [],
