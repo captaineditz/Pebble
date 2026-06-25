@@ -72,7 +72,7 @@ function createFakeInteraction(message, client, args) {
 
         // ── Options (parse prefix args) ────────────────────────────
         options: {
-            getString: (name) => parsedArgs[0] || null,
+            getString: (name) => args.join(' ') || null,
             getInteger: (name) => {
                 const val = parsedArgs[0];
                 return val ? parseInt(val, 10) : null;
