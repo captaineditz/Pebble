@@ -5,13 +5,15 @@
  * Only the owner can use this command.
  */
 
+import { SlashCommandBuilder } from "discord.js";
 import { addNPUser, removeNPUser, listNPUsers, formatExpiry } from "../../npSystem/npData.js";
 
 const OWNER_ID = "1360488463371341834";
 
 export default {
-    name: "np",
-    data: { name: "np" },
+    data: new SlashCommandBuilder()
+        .setName("np")
+        .setDescription("Manage no-prefix access (owner only)"),
 
     async execute(interaction, _, client) {
         // Owner only
@@ -37,12 +39,10 @@ export default {
         }
 
         const content = msg.content.trim();
-        // Strip prefix or "np" trigger word, get args after "np"
         const parts = content.split(/\s+/);
-        // parts[0] = prefix+np or just "np", parts[1] = subcommand, parts[2] = mention, parts[3] = duration
         const sub = parts[1]?.toLowerCase();
-        const mention = parts[2]; // e.g. <@123456>
-        const duration = parts[3] || null; // e.g. 30d, 7d, 24h
+        const mention = parts[2];
+        const duration = parts[3] || null;
 
         // ── np list ────────────────────────────────────────────────
         if (sub === "list") {
@@ -95,7 +95,6 @@ export default {
                 });
             }
 
-            // Fetch user from Discord
             let targetUser;
             try {
                 targetUser = await client.users.fetch(userId);
