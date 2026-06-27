@@ -1,55 +1,122 @@
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { createEmbed } from '../../utils/embeds.js';
-import { logger } from '../../utils/logger.js';
-import { InteractionHelper } from '../../utils/interactionHelper.js';
+import {
+    SlashCommandBuilder,
+    EmbedBuilder
+} from "discord.js";
+import { performance } from "node:perf_hooks";
+
+const LATENCY_THRESHOLDS = Object.freeze({
+    GOOD: 100,
+    FAIR: 200,
+    POOR: 400
+});
+
+const LATENCY_STATUS = Object.freeze({
+    GOOD: {
+        emoji: "🟢",
+        status: "All Systems Operational",
+        color: 0x57F287 // Green
+    },
+    FAIR: {
+        emoji: "🟡",
+        status: "Minor Latency Detected",
+        color: 0xFEE75C // Yellow
+    },
+    POOR: {
+        emoji: "🟠",
+        status: "Experiencing High Latency",
+        color: 0xFAA61A // Orange
+    },
+    BAD: {
+        emoji: "🔴",
+        status: "Service Performance Degraded",
+        color: 0xED4245 // Red
+    }
+});
+
+function getLatencyStatus(ms) {
+    if (ms <= LATENCY_THRESHOLDS.GOOD) {
+        return LATENCY_STATUS.GOOD;
+    }
+
+    if (ms <= LATENCY_THRESHOLDS.FAIR) {
+        return LATENCY_STATUS.FAIR;
+    }
+
+    if (ms <= LATENCY_THRESHOLDS.POOR) {
+        return LATENCY_STATUS.POOR;
+    }
+
+    return LATENCY_STATUS.BAD;
+}
+
+function formatLatency(ms, info) {
+    return `${info.emoji} \`${ms}ms\``;
+}
 
 export default {
     data: new SlashCommandBuilder()
         .setName("ping")
-        .setDescription("Checks the bot's latency and API speed"),
+        .setDescription("View Pebble's current latency and status."),
 
-    async execute(interaction) {
-        const deferSuccess = await InteractionHelper.safeDefer(interaction);
-        if (!deferSuccess) {
-            logger.warn(`Ping interaction defer failed`, {
-                userId: interaction.user.id,
-                guildId: interaction.guildId,
-                commandName: 'ping'
-            });
-            return;
-        }
-
+    async execute(interaction, client) {
         try {
-            await InteractionHelper.safeEditReply(interaction, {
-                content: "Pinging...",
-            });
+            const start = performance.now();
 
-            const latency = Date.now() - interaction.createdTimestamp;
-            const apiLatency = Math.round(interaction.client.ws.ping);
+            await interaction.deferReply();
 
-            const embed = createEmbed({ title: "🏓 Pong!", description: null }).addFields(
-                { name: "Bot Latency", value: `${latency}ms`, inline: true },
-                { name: "API Latency", value: `${apiLatency}ms`, inline: true },
+            const responseTime = Math.round(performance.now() - start);
+            const discordConnection = client.ws.ping;
+
+            const connectionStatus = getLatencyStatus(discordConnection);
+            const responseStatus = getLatencyStatus(responseTime);
+            const overallStatus = getLatencyStatus(
+                Math.max(discordConnection, responseTime)
             );
 
-            await InteractionHelper.safeEditReply(interaction, {
-                content: null,
-                embeds: [embed],
+            const embed = new EmbedBuilder()
+                .setColor(overallStatus.color)
+                .setTitle("🤖 Pebble Ping")
+                .addFields(
+                    {
+                        name: "📡 Discord Connection",
+                        value: formatLatency(discordConnection, connectionStatus),
+                        inline: true
+                    },
+                    {
+                        name: "⚡ Response Time",
+                        value: formatLatency(responseTime, responseStatus),
+                        inline: true
+                    },
+                    {
+                        name: "💚 Status",
+                        value: `${overallStatus.emoji} ${overallStatus.status}`,
+                        inline: false
+                    }
+                )
+                .setFooter({
+                    text: "Pebble • Fast. Reliable. Modern."
+                })
+                .setTimestamp();
+
+            await interaction.editReply({
+                embeds: [embed]
             });
+
         } catch (error) {
-            logger.error('Ping command error:', error);
-            try {
-                return await InteractionHelper.safeReply(interaction, {
-                    embeds: [createEmbed({ title: 'System Error', description: 'Could not determine latency at this time.', color: 'error' })],
-                    flags: MessageFlags.Ephemeral,
-                });
-            } catch (replyError) {
-                logger.error('Failed to send error reply:', replyError);
+            console.error("[PING COMMAND]", error);
+
+            const ERROR_MESSAGE = {
+                content: "❌ An unexpected error occurred while checking Pebble's status."
+            };
+
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply(ERROR_MESSAGE).catch(() => {});
+            } else {
+                await interaction.reply({
+                    ...ERROR_MESSAGE,
+                    ephemeral: true
+                }).catch(() => {});
             }
         }
-    },
+    }
 };
-
-
-
-
