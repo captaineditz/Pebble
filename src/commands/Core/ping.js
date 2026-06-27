@@ -58,14 +58,15 @@ export default {
         .setName("ping")
         .setDescription("View Pebble's current latency and status."),
 
-    async execute(interaction, client) {
+    async execute(interaction, guildConfig, client) {
         try {
             const start = performance.now();
 
             await interaction.deferReply();
 
             const responseTime = Math.round(performance.now() - start);
-            const discordConnection = client.ws.ping;
+            const rawPing = client?.ws?.ping ?? interaction.client?.ws?.ping ?? -1;
+            const discordConnection = rawPing < 0 ? 0 : rawPing;
 
             const connectionStatus = getLatencyStatus(discordConnection);
             const responseStatus = getLatencyStatus(responseTime);
