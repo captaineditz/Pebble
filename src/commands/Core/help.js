@@ -6,161 +6,50 @@ import {
 } from "discord.js";
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { createEmbed } from "../../utils/embeds.js";
-import {
-    createSelectMenu,
-} from "../../utils/components.js";
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { createSelectMenu } from "../../utils/components.js";
 
 const CATEGORY_SELECT_ID = "help-category-select";
-const ALL_COMMANDS_ID = "help-all-commands";
-const BUG_REPORT_BUTTON_ID = "help-bug-report";
-const HELP_MENU_TIMEOUT_MS = 5 * 60 * 1000;
 
-const CATEGORY_ICONS = {
-    Core: "ℹ️",
-    Moderation: "🛡️",
-    Economy: "💰",
-    Fun: "🎮",
-    Leveling: "📊",
-    Utility: "🔧",
-    Ticket: "🎫",
-    Welcome: "👋",
-    Giveaway: "🎉",
-    Counter: "🔢",
-    Tools: "🛠️",
-    Search: "🔍",
-    Reaction_Roles: "🎭",
-    Community: "👥",
-    Birthday: "🎂",
-    Config: "⚙️",
-};
+export const CATEGORIES = [
+    { value: "Moderation",    label: "Moderation",     emoji: "🔨", desc: "Bans, kicks, mutes & warnings" },
+    { value: "Leveling",      label: "Leveling",       emoji: "🏆", desc: "XP, ranks & leaderboards" },
+    { value: "Ticket",        label: "Tickets",        emoji: "📩", desc: "Multi-panel support system" },
+    { value: "Giveaway",      label: "Giveaways",      emoji: "🎁", desc: "Create & manage giveaways" },
+    { value: "Welcome",       label: "Welcome",        emoji: "🌐", desc: "Greet messages, cards & goodbye" },
+    { value: "Community",     label: "Community",      emoji: "💬", desc: "Polls, apps & engagement" },
+    { value: "Config",        label: "Config",         emoji: "🔩", desc: "Bot & server settings" },
+    { value: "Counter",       label: "Counter",        emoji: "📡", desc: "Live stat channels" },
+    { value: "Voice",         label: "Join to Create", emoji: "🔊", desc: "Dynamic voice channels" },
+    { value: "Reaction_roles",label: "Reaction Roles", emoji: "🏷️", desc: "Self-assignable roles" },
+    { value: "Verification",  label: "Verification",   emoji: "🔐", desc: "Access gating workflows" },
+    { value: "Utility",       label: "Utilities",      emoji: "🛠️", desc: "Server tools & helpers" },
+];
 
 export async function createInitialHelpMenu(client) {
-    const commandsPath = path.join(__dirname, "../../commands");
-    const categoryDirs = (
-        await fs.readdir(commandsPath, { withFileTypes: true })
-    )
-        .filter((dirent) => dirent.isDirectory())
-        .map((dirent) => dirent.name)
-        .sort();
+    const botName = client?.user?.username || "Pebble";
 
-    const options = [
-        {
-            label: "📋 All Commands",
-            description: "View all available commands with pagination",
-            value: ALL_COMMANDS_ID,
-        },
-        ...categoryDirs.map((category) => {
-            const categoryName =
-                category.charAt(0).toUpperCase() +
-                category.slice(1).toLowerCase();
-            const icon = CATEGORY_ICONS[categoryName] || "🔍";
-            return {
-                label: `${icon} ${categoryName}`,
-                description: `View commands in the ${categoryName} category`,
-                value: category,
-            };
-        }),
-    ];
-
-    const botName = client?.user?.username || "Bot";
     const embed = createEmbed({
         title: `🤖 ${botName} Help Center`,
-        description: "Your all-in-one Discord companion for moderation, economy, fun, and server management.",
-        color: 'primary'
+        description: "Your all-in-one Discord companion for moderation, leveling, ticketing, and more.\nSelect a category below to explore commands.",
+        color: "primary",
+        timestamp: false,
     });
 
-    embed.addFields(
-        {
-            name: "🛡️ **Moderation**",
-            value: "Server moderation, user management, and enforcement tools",
-            inline: true
-        },
-        {
-            name: "💰 **Economy**",
-            value: "Currency system, shops, and virtual economy",
-            inline: true
-        },
-        {
-            name: "🎮 **Fun**",
-            value: "Games, entertainment, and interactive commands",
-            inline: true
-        },
-        {
-            name: "📊 **Leveling**",
-            value: "User levels, XP system, and progression tracking",
-            inline: true
-        },
-        {
-            name: "🎫 **Tickets**",
-            value: "Support ticket system for server management",
-            inline: true
-        },
-        {
-            name: "🎉 **Giveaways**",
-            value: "Automated giveaway management and distribution",
-            inline: true
-        },
-        {
-            name: "👋 **Welcome**",
-            value: "Member welcome messages and onboarding",
-            inline: true
-        },
-        {
-            name: "🎂 **Birthdays**",
-            value: "Birthday tracking and celebration features",
-            inline: true
-        },
-        {
-            name: "👥 **Community**",
-            value: "Community tools, applications, and member engagement",
-            inline: true
-        },
-        {
-            name: "⚙️ **Config**",
-            value: "Server and bot configuration management commands",
-            inline: true
-        },
-        {
-            name: "🔢 **Counter**",
-            value: "Live counter channel setup and counter controls",
-            inline: true
-        },
-        {
-            name: "🎙️ **Join to Create**",
-            value: "Dynamic voice channel creation and management",
-            inline: true
-        },
-        {
-            name: "🎭 **Reaction Roles**",
-            value: "Self-assignable roles using reaction-role systems",
-            inline: true
-        },
-        {
-            name: "✅ **Verification**",
-            value: "Member verification workflows and access gating",
-            inline: true
-        },
-        {
-            name: "🔧 **Utilities**",
-            value: "Useful tools and server utilities",
-            inline: true
-        }
-    );
+    for (const cat of CATEGORIES) {
+        embed.addFields({
+            name: `${cat.emoji} ${cat.label}`,
+            value: cat.desc,
+            inline: true,
+        });
+    }
 
     embed.setFooter({
-        text: "The Best bot"
+        text: `${CATEGORIES.length} categories  •  Use the menu below to browse commands  •  The best bot`,
     });
-    embed.setTimestamp();
 
     const supportButton = new ButtonBuilder()
         .setLabel("Support Server")
-        .setURL("https://discord.gg/n9VXyeVrqX")
+        .setURL("https://discord.gg/xwYzSxzUVa")
         .setStyle(ButtonStyle.Link);
 
     const inviteButton = new ButtonBuilder()
@@ -168,20 +57,23 @@ export async function createInitialHelpMenu(client) {
         .setURL("https://discord.com/oauth2/authorize?client_id=1505174828905271436&permissions=8&integration_type=0&scope=bot")
         .setStyle(ButtonStyle.Link);
 
+    const linkRow = new ActionRowBuilder().addComponents(supportButton, inviteButton);
+
+    const selectOptions = CATEGORIES.map(cat => ({
+        label: `${cat.emoji} ${cat.label}`,
+        description: cat.desc,
+        value: cat.value,
+    }));
+
     const selectRow = createSelectMenu(
         CATEGORY_SELECT_ID,
-        "Select to view the commands",
-        options,
+        "Select a category to browse commands",
+        selectOptions,
     );
-
-    const buttonRow = new ActionRowBuilder().addComponents([
-        supportButton,
-        inviteButton,
-    ]);
 
     return {
         embeds: [embed],
-        components: [buttonRow, selectRow],
+        components: [linkRow, selectRow],
     };
 }
 
@@ -191,7 +83,6 @@ export default {
         .setDescription("Displays the help menu with all available commands"),
 
     async execute(interaction, guildConfig, client) {
-        const { MessageFlags } = await import('discord.js');
         await InteractionHelper.safeDefer(interaction);
 
         const { embeds, components } = await createInitialHelpMenu(client);
@@ -200,22 +91,5 @@ export default {
             embeds,
             components,
         });
-
-        setTimeout(async () => {
-            try {
-                const closedEmbed = createEmbed({
-                    title: "Help menu closed",
-                    description: "Help menu has been closed, use /help again.",
-                    color: "secondary",
-                });
-
-                await InteractionHelper.safeEditReply(interaction, {
-                    embeds: [closedEmbed],
-                    components: [],
-                });
-            } catch (error) {
-                // silently ignore
-            }
-        }, HELP_MENU_TIMEOUT_MS);
     },
 };
