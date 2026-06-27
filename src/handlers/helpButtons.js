@@ -1,13 +1,9 @@
-import { createEmbed } from '../utils/embeds.js';
-import { createAllCommandsMenu } from './helpSelectMenus.js';
 import { createInitialHelpMenu } from '../commands/Core/help.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
+import { createCategoryCommandsMenu } from './helpSelectMenus.js';
 import { logger } from '../utils/logger.js';
 
-const COMMAND_LIST_ID = "help-command-list";
 const BACK_BUTTON_ID = "help-back-to-main";
 const PAGINATION_PREFIX = "help-page";
-const BUG_REPORT_BUTTON_ID = "help-bug-report";
 
 export const helpBackButton = {
     name: BACK_BUTTON_ID,
@@ -18,10 +14,7 @@ export const helpBackButton = {
             }
 
             const { embeds, components } = await createInitialHelpMenu(client);
-            await interaction.editReply({
-                embeds,
-                components,
-            });
+            await interaction.editReply({ embeds, components });
         } catch (error) {
             if (error?.code === 40060 || error?.code === 10062) {
                 logger.warn('Help back button interaction already acknowledged or expired.', {
@@ -32,53 +25,9 @@ export const helpBackButton = {
                 });
                 return;
             }
-
             throw error;
         }
     },
-};
-
-export const helpBugReportButton = {
-    name: BUG_REPORT_BUTTON_ID,
-    async execute(interaction, client) {
-        const githubButton = new ButtonBuilder()
-            .setLabel('🐛 Report Bug on GitHub')
-            .setStyle(ButtonStyle.Link)
-            .setURL('https://github.com/codebymitch/TitanBot/issues');
-
-        const bugRow = new ActionRowBuilder().addComponents(githubButton);
-
-        const bugReportEmbed = createEmbed({
-            title: '🐛 Bug Report',
-            description: 'Found a bug? Please report it on our GitHub Issues page!\n\n' +
-                '**When reporting a bug, please include:**\n' +
-                '• 📝 Detailed description of the issue\n' +
-                '• 📋 Steps to reproduce the problem\n' +
-                '• 📸 Screenshots if applicable\n' +
-                '• 💻 Your bot version and environment\n\n' +
-                'This helps us fix issues faster and more effectively!',
-            color: 'error'
-        });
-        bugReportEmbed.setFooter({
-            text: 'TitanBot Bug Reporting System',
-            iconURL: client.user.displayAvatarURL()
-        });
-        bugReportEmbed.setTimestamp();
-
-        await interaction.reply({
-            embeds: [bugReportEmbed],
-            components: [bugRow],
-            flags: MessageFlags.Ephemeral
-        });
-    },
-};
-
-export const helpReportCommand = {
-    name: COMMAND_LIST_ID,
-    categoryName: null,
-    async execute(interaction, client) {
-        
-    }
 };
 
 function getPaginationInfo(components) {
@@ -96,7 +45,6 @@ function getPaginationInfo(components) {
             }
         }
     }
-
     return { currentPage: 1, totalPages: 1 };
 }
 
@@ -108,28 +56,26 @@ export const helpPaginationButton = {
                 await interaction.deferUpdate();
             }
 
+            // Read category from stored embed title so we paginate the right category
+            const embedTitle = interaction.message?.embeds?.[0]?.title || '';
+            const footerText = interaction.message?.embeds?.[0]?.footer?.text || '';
+
+            // Footer format: "Page X / Y  •  Category: <value>  •  ..."
+            const catMatch = footerText.match(/Category:\s*(\S+)/i);
+            const categoryValue = catMatch ? catMatch[1] : null;
+
             const { currentPage, totalPages } = getPaginationInfo(interaction.message?.components);
 
             let nextPage = currentPage;
             switch (interaction.customId) {
-                case `${PAGINATION_PREFIX}_first`:
-                    nextPage = 1;
-                    break;
-                case `${PAGINATION_PREFIX}_prev`:
-                    nextPage = Math.max(1, currentPage - 1);
-                    break;
-                case `${PAGINATION_PREFIX}_next`:
-                    nextPage = Math.min(totalPages, currentPage + 1);
-                    break;
-                case `${PAGINATION_PREFIX}_last`:
-                    nextPage = totalPages;
-                    break;
-                default:
-                    nextPage = currentPage;
-                    break;
+                case `${PAGINATION_PREFIX}_first`: nextPage = 1; break;
+                case `${PAGINATION_PREFIX}_prev`:  nextPage = Math.max(1, currentPage - 1); break;
+                case `${PAGINATION_PREFIX}_next`:  nextPage = Math.min(totalPages, currentPage + 1); break;
+                case `${PAGINATION_PREFIX}_last`:  nextPage = totalPages; break;
+                default: nextPage = currentPage; break;
             }
 
-            const { embeds, components } = await createAllCommandsMenu(nextPage, client);
+            const { embeds, components } = await createCategoryCommandsMenu(categoryValue, client, nextPage);
             await interaction.editReply({ embeds, components });
         } catch (error) {
             if (error?.code === 40060 || error?.code === 10062) {
@@ -141,10 +87,7 @@ export const helpPaginationButton = {
                 });
                 return;
             }
-
             throw error;
         }
     },
 };
-
-
