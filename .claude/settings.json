@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(Remove-Item \"D:\\\\Pebble\\\\src\\\\commands\\\\Moderation\\\\autorole.js\")",
-      "PowerShell(Remove-Item \"D:\\\\Pebble\\\\src\\\\commands\\\\Moderation\\\\autorole.js\" -Confirm:$false)"
+      "PowerShell(Remove-Item \"D:\\\\Pebble\\\\src\\\\commands\\\\Moderation\\\\autorole.js\" -Confirm:$false)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git push *)",
+      "Bash(git -C \"d:/Pebble\" status)",
+      "Bash(git -C \"d:/Pebble\" diff src/commands/Core/ping.js)",
+      "Bash(git -C \"d:/Pebble\" add src/commands/Core/ping.js)",
+      "Bash(git -C d:/Pebble commit -m ' *)",
+      "Bash(git -C \"d:/Pebble\" push)"
     ]
   }
 }
