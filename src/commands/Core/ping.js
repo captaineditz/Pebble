@@ -2,7 +2,6 @@ import {
     SlashCommandBuilder,
     EmbedBuilder
 } from "discord.js";
-import { performance } from "node:perf_hooks";
 
 const LATENCY_THRESHOLDS = Object.freeze({
     GOOD: 100,
@@ -60,13 +59,11 @@ export default {
 
     async execute(interaction, guildConfig, client) {
         try {
-            const start = performance.now();
-
             await interaction.deferReply();
 
-            const responseTime = Math.round(performance.now() - start);
+            const responseTime = Date.now() - interaction.createdTimestamp;
             const rawPing = client?.ws?.ping ?? interaction.client?.ws?.ping ?? -1;
-            const discordConnection = rawPing < 0 ? 0 : rawPing;
+            const discordConnection = rawPing >= 0 ? Math.round(rawPing) : responseTime;
 
             const connectionStatus = getLatencyStatus(discordConnection);
             const responseStatus = getLatencyStatus(responseTime);
